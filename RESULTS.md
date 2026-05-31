@@ -1,7 +1,3 @@
-# Reproduction Results
-
-Reproduction of *"Adversarial Illusions in Multi-Modal Embeddings"* (Zhang et al., arXiv 2308.11804v5).
-
 ## Environment
 
 | Item | Value |
