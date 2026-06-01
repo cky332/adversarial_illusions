@@ -1,7 +1,3 @@
-# Reproduction Results
-
-Reproduction of *"Adversarial Illusions in Multi-Modal Embeddings"* (Zhang et al., arXiv 2308.11804v5).
-
 ## Environment
 
 | Item | Value |
@@ -20,22 +16,9 @@ Reproduction of *"Adversarial Illusions in Multi-Modal Embeddings"* (Zhang et al
 - ImageBind huge 权重首次运行自动下载到 `.checkpoints/`（4.47 GB）。
 - OpenCLIP ViT-H-14 / RN50 权重首次运行 transfer 时自动下载到 `bpe/`。
 
-## Summary
 
-| 论文 Table | 内容 | 状态 | 复现质量 |
-|---|---|---|---|
-| Table 1 | White-box zero-shot 图像分类（ImageNet） | ✅ | 数字级一致 |
-| Table 4 | White-box 音频分类（AudioSet） | ✅ | 数字级一致 |
-| Table 5 | White-box 音频检索（AudioCaps） | ✅ | 数字级一致 |
-| Table 6 | White-box 热成像分类（LLVIP） | ✅ | 数字级一致 |
-| Table 7 | Transfer attack（OpenCLIP ensemble surrogate） | ✅ | 数字级一致（修正 `number_images=4` 默认 bug 后，100 样本下 100/91/100/100 ≈ 论文 100/90/100/100） |
-| Table 8 | Query-based black-box attack | ✅ | 数字级一致 |
-| Table 9 | JPEG defense / JPEG-resistant illusion | 🟡 | 普通行完美；JPEG-resistant 行趋势对、绝对值偏低 |
-| Table 10 | Anomaly detection (data augmentation) | ✅ | 数字级一致 |
-| Table 2 | Image generation (BindDiffusion) | ❌ 未跑 | 需要 BindDiffusion 子模块 + checkpoint |
-| Table 3 | Text generation (PandaGPT) | ❌ 未跑 | 需要 PandaGPT 子模块 + checkpoint |
 
-**10 张表中 7 张数字级完美复现，1 张部分复现，2 张未跑（需要下游生成模型）**。
+**10 张表中 7 张表复现成功，1 张部分复现，2 张表的结果未跑（需要下游生成模型）**。
 
 ---
 
@@ -57,8 +40,6 @@ CUDA_VISIBLE_DEVICES=5 python adversarial_illusions.py imagenet/whitebox/audiocl
 | ImageBind | **100%** | **0.9388 ± 0.024** | 100% | 0.9554 ± 0.02 |
 | AudioCLIP | **100%** | **0.7876 ± 0.047** | 100% | 0.7841 ± 0.01 |
 
-✅ **完美复现** — Top-1 完全一致，alignment 在论文标准差范围内。
-
 ---
 
 ## Table 4 — White-box Zero-shot Audio Classification (AudioSet, ε=0.1)
@@ -75,8 +56,6 @@ CUDA_VISIBLE_DEVICES=7 python adversarial_illusions.py audioset/whitebox/audiocl
 | 模型 | 我的 Top-1 | 我的 align | 论文 Top-1 | 论文 align |
 |---|---|---|---|---|
 | AudioCLIP | **100%** | **0.4156 ± 0.066** | 99% | 0.4060 ± 0.06 |
-
-✅ **完美复现** — 100% vs 99% 仅 1 个样本差异（采样噪声）。
 
 ---
 
@@ -96,7 +75,6 @@ CUDA_VISIBLE_DEVICES=6 python adversarial_illusions.py audiocaps/whitebox/imageb
 |---|---|---|---|---|
 | ImageBind | **100%** | **0.9225 ± 0.049** | 99% | 0.9295 ± 0.05 |
 
-✅ **完美复现**。
 
 ---
 
@@ -120,8 +98,6 @@ CUDA_VISIBLE_DEVICES=4 python thermal_illusion_classification.py 2>&1 | tee outp
 | 8 | **100%** | 0.2731 ± 0.034 | 100% | 0.2841 ± 0.03 |
 | 16 | **100%** | 0.4179 ± 0.029 | 100% | 0.4210 ± 0.03 |
 | 32 | **100%** | 0.5528 ± 0.032 | 100% | 0.5576 ± 0.03 |
-
-✅ **数字级完美复现** — 6/7 行 Top-1 完全一致，ε=4 仅差 6%（3 张图采样差异）；cosine similarity 平均差 < 0.01。
 
 ---
 
@@ -151,7 +127,6 @@ python evaluate_illusions.py imagenet/transfer/ensemble_eval
 | OpenCLIP-ViT-H-14（surrogate 自评） | 100% | 0.6798 ± 0.053 | 100% | ✅ |
 | OpenCLIP-RN50（surrogate 自评） | 100% | 0.5774 ± 0.057 | 100% | ✅ |
 
-✅ **数字级完美复现**。
 
 说明：AudioCLIP-partial 是论文 5.3 节提到的 "ostensibly close to CLIP's embedding space" 的部分训练 checkpoint，所以从 OpenCLIP-based surrogate 迁过去几乎等同于"局部白盒"。ImageBind 也共享 CLIP ViT-H backbone，因此达到 100% transfer ASR。
 
@@ -190,7 +165,6 @@ CUDA_VISIBLE_DEVICES=7 python query_attack.py audioclip
 | **ImageBind** | **98%** (98/100) | **0.2669 ± 0.036** | 98% | 0.26 |
 | **AudioCLIP** | **98%** (98/100) | **0.1691 ± 0.029** | 100% | 0.16 |
 
-✅ **逐位匹配**。
 
 **注意：** 脚本输出的 "Average organic alignment"（ImageBind: 0.195, AudioCLIP: 0.106）**不是真正的 organic baseline**，而是 `criterion(model.forward(norm(x_adv)), Y)`，是对抗样本另一种归一化形态和目标文本的相似度，与论文 Table 8 的 "organic alignment" 列（ImageBind 0.29, AudioCLIP 0.14）口径不同。请以 adversarial alignment 列为准。
 
@@ -234,9 +208,9 @@ CUDA_VISIBLE_DEVICES=4 python evaluate_jpeg.py
 | **JPEG-resistant** x_jpeg → 无 JPEG | **39%** | **0.195 ± 0.039** | **98%** | **0.235 ± 0.04** |
 | **JPEG-resistant** x_jpeg → 加 JPEG | **60%** | **0.238 ± 0.050** | **94%** | **0.208 ± 0.04** |
 
-🟡 **趋势完美，绝对值偏低。**
+🟡 **趋势差不多，但是绝对值偏低。**
 
-- 前两行（普通 illusion 在有/无 JPEG 下）**完美复现**。
+- 前两行（普通 illusion 在有/无 JPEG 下）复现成功
 - 核心定性结论"JPEG-resistant illusion 能逃过 JPEG 防御"已验证：JPEG-resistant illusion 在"加 JPEG"评估下 ASR 反而 ≥ "无 JPEG"评估（42% > 35%，60% > 39%），证明它确实针对 JPEG 压缩做了优化。
 - **绝对 ASR 比论文低约一半**。多 epoch 实验（100/150/200/250/300）证明这不是 epoch 不对：
 
@@ -311,7 +285,7 @@ CUDA_VISIBLE_DEVICES=4 python anomaly_detection.py 2>&1 | tee outputs/imagenet/w
 | | x_δ | 0.419 | 0.295 |
 | | x_jpeg | 0.781 | 0.707 |
 
-✅ **核心结论完美复现：** 在所有 augmentation 上都有 `x（原图）> x_jpeg（JPEG-resistant）> x_δ（普通对抗）`。
+ 在所有 augmentation 上都有 `x（原图）> x_jpeg（JPEG-resistant）> x_δ（普通对抗）`。
 
 - ImageBind 几乎所有数字差异 < 0.02。
 - AudioCLIP 的 x_δ / x_jpeg 列系统性偏高 ~0.1，与 Table 9 看到的同一现象一致（你的 AudioCLIP illusion 比论文版本在增强下稍稳定一些）。
@@ -363,16 +337,3 @@ cd PandaGPT && python code/text_generation.py
    ```
 2. JPEG-resistant 评估时按需修改 `evaluate_jpeg.py` 用 `x_advs_200.npy`（见 Table 9 命令）。
 
----
-
-## 复现一致性总结
-
-| 维度 | 评价 |
-|---|---|
-| 核心攻击能力（白盒、迁移、查询） | ✅ 全部复现 |
-| 核心定性结论（embedding-level attack 跨任务有效） | ✅ 全部复现 |
-| 防御 / 检测分析（JPEG defense, anomaly detection） | ✅ 趋势复现；JPEG-resistant 绝对值偏低 |
-| 下游生成任务（image / text generation） | ❌ 未跑（需下游模型） |
-| 全表数字级精确匹配 | 7/10 完美，1/10 部分，2/10 未跑 |
-
-**这是一份 "数字级精确" + "定性结论完整" 的复现**，足以作为论文复现作业 / 安全研究的实证基础。
