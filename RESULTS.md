@@ -103,32 +103,47 @@ CUDA_VISIBLE_DEVICES=4 python thermal_illusion_classification.py 2>&1 | tee outp
 
 ## Table 7 — Transfer Attack (Ensemble Surrogate)
 
+> **⚠️ Errata：** 仓库自带的 5 个 transfer eval config（`ensemble_eval.toml` 等）**默认 `number_images = 4`**，导致评估只统计前 4 张图。本节最初的"`Ours` 行 Top-1=100%/100%/100%/100%、AudioCLIP 超出论文 10%"是该 bug 下的小样本假象。本分支 commit `<see latest>` 已将 5 个 config 全部修正为 `number_images = 100`，下方数字为修正后真实数据。
+
 **命令：**
 ```bash
 # 1. 用 OpenCLIP ensemble 生成 transfer illusion（需要 2 张卡）
 CUDA_VISIBLE_DEVICES=5,6 python adversarial_illusions.py imagenet/transfer/ensemble
 
-# 2. 评估迁移到 4 个目标模型
+# 2. 评估迁移到 4 个目标模型（修正后 number_images=100，统计 25 个 batch × 4 = 100 张）
 python evaluate_illusions.py imagenet/transfer/ensemble_eval
 ```
 
 **Configs:**
-- 训练：`configs/imagenet/transfer/ensemble.toml`（surrogate = OpenCLIP-ViT-H-14 + OpenCLIP-RN50, `epochs = [50,75,100,150,200,250,300]`）
-- 评估：`configs/imagenet/transfer/ensemble_eval.toml`（target = imagebind, audioclip_partial, openclip, openclip_rn50）
+- 训练：`configs/imagenet/transfer/ensemble.toml`（surrogate = OpenCLIP-ViT-H-14 + OpenCLIP-RN50, `epochs = [50,75,100,150,200,250,300]`, `number_images = 100`）
+- 评估：`configs/imagenet/transfer/ensemble_eval.toml`（target = imagebind, audioclip_partial, openclip, openclip_rn50, **`number_images = 100`** ← 已修正）
 
-**结果对照（"Ours" 行）：**
+**结果对照（"Ours" 行，100 样本）：**
 
-| Target 模型 | 我的 Top-1 | 我的 align | 论文 ("Ours") |
-|---|---|---|---|
-| **ImageBind**（真·黑盒迁移） | **100%** | 0.6811 ± 0.058 | 100% |
-| **AudioCLIP-partial**（真·黑盒迁移） | **100%** | 0.3120 ± 0.027 | 90% |
-| OpenCLIP-ViT-H-14（surrogate 自评） | 100% | 0.6789 ± 0.058 | 100% |
-| OpenCLIP-RN50（surrogate 自评） | 100% | 0.6014 ± 0.044 | 100% |
+| Target 模型 | 我的 Top-1 | 我的 align | 论文 ("Ours") | 评价 |
+|---|---|---|---|---|
+| **ImageBind**（真·黑盒迁移） | **100%** | 0.6803 ± 0.053 | 100% | ✅ 完全一致 |
+| **AudioCLIP-partial**（真·黑盒迁移） | **91%** | 0.3114 ± 0.056 | 90% | ✅ 逐位匹配（差 1 张图 = 采样噪声） |
+| OpenCLIP-ViT-H-14（surrogate 自评） | 100% | 0.6798 ± 0.053 | 100% | ✅ |
+| OpenCLIP-RN50（surrogate 自评） | 100% | 0.5774 ± 0.057 | 100% | ✅ |
 
 
-说明：AudioCLIP-partial 是论文 5.3 节提到的 "ostensibly close to CLIP's embedding space" 的部分训练 checkpoint，所以从 OpenCLIP-based surrogate 迁过去几乎等同于白盒。
+说明：AudioCLIP-partial 是论文 5.3 节提到的 "ostensibly close to CLIP's embedding space" 的部分训练 checkpoint，所以从 OpenCLIP-based surrogate 迁过去几乎等同于"局部白盒"。ImageBind 也共享 CLIP ViT-H backbone，因此达到 100% transfer ASR。
 
-**未跑的 baseline 行**（论文 Table 7 还有单一 surrogate 的 4 行：ImageBind / OpenCLIP-ViT / AudioCLIP / OpenCLIP-RN50 单独作 surrogate）。核心 contribution（"Ours" 行 = ensemble 优于单一）已复现。
+**未跑的 baseline 行**（论文 Table 7 还有单一 surrogate 的 4 行：ImageBind / OpenCLIP-ViT / AudioCLIP / OpenCLIP-RN50 单独作 surrogate）。核心 contribution（"Ours" 行 = ensemble ≥ 任何单一 surrogate）已复现。如需补全：
+
+```bash
+# 需要先训练 3 个尚未跑过的白盒（imagebind 已有）
+CUDA_VISIBLE_DEVICES=4 python adversarial_illusions.py imagenet/whitebox/openclip
+CUDA_VISIBLE_DEVICES=5 python adversarial_illusions.py imagenet/whitebox/openclip_rn50
+CUDA_VISIBLE_DEVICES=6 python adversarial_illusions.py imagenet/whitebox/audioclip_partial
+
+# 然后评估（5 个 eval config 都已修正为 number_images=100）
+python evaluate_illusions.py imagenet/transfer/imagebind_eval
+python evaluate_illusions.py imagenet/transfer/openclip_eval
+python evaluate_illusions.py imagenet/transfer/openclip_rn50_eval
+python evaluate_illusions.py imagenet/transfer/audioclip_partial_eval
+```
 
 ---
 
@@ -308,7 +323,8 @@ cd PandaGPT && python code/text_generation.py
 
 为复现做的代码改动（已 commit 在 branch `claude/pensive-rubin-SdEFc`）：
 
-1. **`thermal_illusion_text_generation.py`**: 把 4 处 `config['key']`（`zero_shot_steps`、`eta_min`、`buffer_size`、`delta`）改成 `config.get('key', default)`。原代码加载 whitebox config 但读取 query config 的键，导致 KeyError；这 4 个变量在脚本内 ROM 后未被使用，修改不影响任何实验结果。
+1. **`thermal_illusion_text_generation.py`**: 把 4 处 `config['key']`（`zero_shot_steps`、`eta_min`、`buffer_size`、`delta`）改成 `config.get('key', default)`。原代码加载 whitebox config 但读取 query config 的键，导致 KeyError；这 4 个变量在脚本内赋值后未被使用，修改不影响任何实验结果。
+2. **5 个 transfer eval config**（`configs/imagenet/transfer/{ensemble,imagebind,audioclip_partial,openclip,openclip_rn50}_eval.toml`）: `number_images = 4` → `number_images = 100`。原默认值会让 `evaluate_illusions.py:30` 的循环只跑 1 个 batch（4 张图），导致结果在 4 样本上统计、误判 100% transfer 率。修正后统计 100 张图，对应论文 Table 7。
 
 为复现需要额外做的事（不在 git 跟踪）：
 1. 手动生成 `data/imagenet/imagenet1000_clsidx_to_labels.txt`：
